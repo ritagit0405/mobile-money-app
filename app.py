@@ -32,7 +32,7 @@ st.markdown("""
     h3 { font-size: 1.1rem !important; margin-bottom: 8px !important; }
     </style>
     """, unsafe_allow_html=True)
-
+ st.subheader("💰手機雲端帳本")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
@@ -142,3 +142,4 @@ with tab3:
                     st.rerun()
     else:
         st.info("尚無資料")
+
