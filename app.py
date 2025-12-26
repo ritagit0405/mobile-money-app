@@ -7,35 +7,36 @@ import plotly.express as px
 # --- 1. 頁面配置 ---
 st.set_page_config(page_title="手機雲端帳本", layout="centered")
 
-# 針對手機版進行字體與佈局的細節微調
+# 針對手機版進行字體與佈局的極致優化
 st.markdown("""
     <style>
-    /* 1. 縮小統計數值的字體，避免重疊 */
+    /* 1. 縮小統計數值的字體，確保手機不重疊 */
     [data-testid="stMetricValue"] { 
-        font-size: 20px !important; 
+        font-size: 18px !important; 
         font-weight: bold; 
     }
     /* 2. 縮小統計標籤的字體 */
     [data-testid="stMetricLabel"] { 
-        font-size: 13px !important; 
+        font-size: 12px !important; 
     }
     /* 3. 讓卡片在空間不足時自動換行 */
     [data-testid="stHorizontalBlock"] {
         flex-wrap: wrap !important;
     }
-    /* 4. 調整 Tab 標籤，讓它在手機上不會擠成一團 */
+    /* 4. 調整 Tab 標籤 */
     .stTabs [data-baseweb="tab"] { 
-        font-size: 15px !important; 
+        font-size: 14px !important; 
         width: 33% !important; 
         padding: 5px 0px !important;
     }
-    /* 5. 縮小歷史表格字體 */
+    /* 5. 縮小表格字體 */
     .stDataFrame div {
         font-size: 12px !important;
     }
-    /* 6. 標題縮小一點，避免像圖片中那樣斷行 */
+    /* 6. 標題縮小避免斷行 */
     h3 {
-        font-size: 1.2rem !important;
+        font-size: 1.1rem !important;
+        margin-bottom: 5px !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -60,7 +61,6 @@ tab1, tab2, tab3 = st.tabs(["📝 新增", "📊 分析", "📜 歷史"])
 # --- Tab 1: 新增紀錄 ---
 with tab1:
     st.subheader("➕ 新增帳目")
-    # 使用 radio 並設為橫向，省空間
     t_choice = st.radio("類型", ["支出", "收入"], horizontal=True)
     
     if t_choice == "收入":
@@ -98,35 +98,38 @@ with tab2:
     else:
         st.info("暫無數據")
 
-# --- Tab 3: 歷史紀錄 (手機排版修復版) ---
+# --- Tab 3: 歷史紀錄 (已修正 NameError 與字體大小) ---
 with tab3:
     if not df.empty:
         df['Month'] = df['日期'].dt.strftime('%Y-%m')
         df['Year'] = df['日期'].dt.year
         all_m = sorted(df['Month'].unique(), reverse=True)
         sel_m = st.selectbox("🔍 選擇月份", all_m)
+        
+        # 關鍵修正點：將變數名稱統一為 sel_y
         sel_y = int(sel_m.split('-')[0])
 
-        # 月度摘要 (標題變小)
+        # 月度摘要
         st.markdown(f"### 📅 {sel_m} 摘要")
         m_df = df[df['Month'] == sel_m].copy()
         m_i = m_df[m_df["收支類型"] == "收入"]["金額"].sum()
         m_e = m_df[m_df["收支類型"] == "支出"]["金額"].sum()
 
         col1, col2, col3 = st.columns(3)
-        col1.metric("當月收入", f"{m_i:,.0f}")
-        col2.metric("當月支出", f"{m_e:,.0f}")
+        col1.metric("月收入", f"{m_i:,.0f}")
+        col2.metric("月支出", f"{m_e:,.0f}")
         col3.metric("月結餘", f"{(m_i-m_e):,.0f}")
 
         # 年度統計
         st.markdown(f"### 🗓️ {sel_y} 年度統計")
-        y_df = df[df['Year'] == sel_year]
+        # 這裡原本錯誤寫成 sel_year，現在已改為 sel_y
+        y_df = df[df['Year'] == sel_y]
         y_i = y_df[y_df["收支類型"] == "收入"]["金額"].sum()
         y_e = y_df[y_df["收支類型"] == "支出"]["金額"].sum()
 
         yc1, yc2, yc3 = st.columns(3)
-        yc1.metric("年度收入", f"{y_i:,.0f}")
-        yc2.metric("年度支出", f"{y_e:,.0f}")
+        yc1.metric("年收入", f"{y_i:,.0f}")
+        yc2.metric("年支出", f"{y_e:,.0f}")
         yc3.metric("年結餘", f"{(y_i-y_e):,.0f}")
         
         st.markdown("---")
@@ -135,18 +138,18 @@ with tab3:
             def style_inc(row):
                 return ['color: #81D8D0' if row['收支類型'] == '收入' else '' for _ in row]
             
-            # 手機版隱藏非必要欄位以維持表格整潔
             disp = m_df.copy()
             disp['日期'] = disp['日期'].dt.strftime('%m-%d')
-            disp = disp[["日期", "分類項目", "收支類型", "金額"]]
+            disp = disp[["日期", "分類項目", "金額"]] # 再縮減一個欄位，讓手機更乾淨
             
-            st.dataframe(disp.style.apply(style_inc, axis=1).format({"金額": "{:,.0f}"}), use_container_width=True, hide_index=False)
+            st.dataframe(disp.style.apply(style_inc, axis=1).format({"金額": "{:,.0f}"}), use_container_width=True)
 
             with st.expander("🗑️ 刪除紀錄"):
-                del_idx = st.number_input("輸入 Index 編號", min_value=0, max_value=int(df.index.max()), step=1)
-                if st.button("⚠️ 執行刪除", type="primary"):
+                del_idx = st.number_input("輸入編號 (Index)", min_value=0, max_value=int(df.index.max()), step=1)
+                if st.button("⚠️ 確認刪除", type="primary"):
                     new_df = df.drop(del_idx).reset_index(drop=True)
                     new_df['日期'] = new_df['日期'].dt.strftime('%Y-%m-%d')
+                    # 移除暫存欄位
                     save_df = new_df.drop(columns=['Month', 'Year']) if 'Month' in new_df.columns else new_df
                     conn.update(data=save_df)
                     st.success("已刪除")
