@@ -7,6 +7,8 @@ import plotly.express as px
 # --- 1. 頁面配置 ---
 st.set_page_config(page_title="手機雲端帳本", layout="centered")
 
+# 在這裡加入實體標題，這樣手機螢幕才會顯示
+st.title("📱 手機雲端帳本")
 # 針對「收入/支出並列、結餘獨立一行」的 RWD 優化
 st.markdown("""
     <style>
@@ -142,4 +144,5 @@ with tab3:
                     st.rerun()
     else:
         st.info("尚無資料")
+
 
