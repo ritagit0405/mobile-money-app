@@ -7,15 +7,34 @@ import plotly.express as px
 # --- 1. 頁面配置 ---
 st.set_page_config(page_title="手機雲端帳本", layout="centered")
 
-# RWD 手機優化樣式
+# 強制 RWD 佈局優化
 st.markdown("""
     <style>
-    [data-testid="stMetricValue"] { font-size: 18px !important; font-weight: bold; }
-    [data-testid="stMetricLabel"] { font-size: 12px !important; }
-    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
-    .stTabs [data-baseweb="tab"] { font-size: 14px !important; width: 33% !important; padding: 5px 0px !important; }
+    /* 強制讓 columns 在手機不換行，並排顯示 */
+    [data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 4px !important;
+    }
+    [data-testid="column"] {
+        flex: 1 1 0% !important;
+        min-width: 0px !important;
+    }
+    
+    /* 縮小 Metric 數字與字體，確保一行能擠下三個 */
+    [data-testid="stMetricValue"] { 
+        font-size: 16px !important; 
+        font-weight: bold; 
+    }
+    [data-testid="stMetricLabel"] { 
+        font-size: 11px !important;
+        white-space: nowrap !important;
+    }
+
+    /* 表格字體優化與間距調整 */
     .stDataFrame div { font-size: 12px !important; }
-    h3 { font-size: 1.1rem !important; margin-bottom: 5px !important; }
+    h3 { font-size: 1.1rem !important; margin-top: 10px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -70,7 +89,7 @@ with tab2:
     else:
         st.info("暫無數據")
 
-# --- Tab 3: 歷史紀錄 (修正 KeyError) ---
+# --- Tab 3: 歷史紀錄 (手機排版優化) ---
 with tab3:
     if not df.empty:
         df['Month'] = df['日期'].dt.strftime('%Y-%m')
@@ -79,23 +98,23 @@ with tab3:
         sel_m = st.selectbox("🔍 選擇月份", all_m)
         sel_y = int(sel_m.split('-')[0])
 
-        # 財務摘要
+        # 1. 當月摘要 (排成一行)
+        st.markdown(f"### 📅 {sel_m} 摘要")
         m_df = df[df['Month'] == sel_m].copy()
         m_i = m_df[m_df["收支類型"] == "收入"]["金額"].sum()
         m_e = m_df[m_df["收支類型"] == "支出"]["金額"].sum()
 
-        st.markdown(f"### 📅 {sel_m} 摘要")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("月收入", f"{m_i:,.0f}")
-        c2.metric("月支出", f"{m_e:,.0f}")
-        c3.metric("月結餘", f"{(m_i-m_e):,.0f}")
+        mc1, mc2, mc3 = st.columns(3)
+        mc1.metric("月收入", f"{m_i:,.0f}")
+        mc2.metric("月支出", f"{m_e:,.0f}")
+        mc3.metric("月結餘", f"{(m_i-m_e):,.0f}")
 
-        # 年度統計
+        # 2. 年度統計 (排成一行)
+        st.markdown(f"### 🗓️ {sel_y} 年度統計")
         y_df = df[df['Year'] == sel_y]
         y_i = y_df[y_df["收支類型"] == "收入"]["金額"].sum()
         y_e = y_df[y_df["收支類型"] == "支出"]["金額"].sum()
 
-        st.markdown(f"### 🗓️ {sel_y} 年度統計")
         yc1, yc2, yc3 = st.columns(3)
         yc1.metric("年收入", f"{y_i:,.0f}")
         yc2.metric("年支出", f"{y_e:,.0f}")
@@ -103,27 +122,26 @@ with tab3:
         
         st.markdown("---")
 
+        # 3. 完整明細表 (支援滑動查看全部欄位)
         if not m_df.empty:
-            # 染色函數
             def style_inc(row):
-                # 這裡需要 '收支類型' 欄位來做判斷
                 return ['color: #81D8D0' if row['收支類型'] == '收入' else '' for _ in row]
             
-            # 準備顯示用的資料，必須包含 '收支類型' 否則會 KeyError
             disp = m_df.copy()
-            disp['日期'] = disp['日期'].dt.strftime('%m-%d')
-            # 關鍵修正：保留 '收支類型'，但後面顯示時會控制寬度或隱藏
-            disp = disp[["日期", "分類項目", "金額", "收支類型"]]
+            disp['日期'] = disp['日期'].dt.strftime('%Y-%m-%d')
+            # 顯示範例圖中的完整欄位
+            disp = disp[["日期", "分類項目", "收支類型", "金額", "結餘", "支出方式", "備註"]]
             
-            # 使用 column_order 來隱藏 '收支類型'，讓手機畫面乾淨，但程式邏輯仍能讀到它
+            st.write("📖 明細表 (可橫向滑動)")
             st.dataframe(
-                disp.style.apply(style_inc, axis=1).format({"金額": "{:,.0f}"}), 
+                disp.style.apply(style_inc, axis=1).format({"金額": "{:,.0f}", "結餘": "{:,.0f}"}), 
                 use_container_width=True,
-                column_order=("日期", "分類項目", "金額") # 隱藏收支類型
+                hide_index=False
             )
 
+            # 4. 刪除紀錄
             with st.expander("🗑️ 刪除紀錄"):
-                del_idx = st.number_input("輸入編號 (Index)", min_value=0, max_value=int(df.index.max()), step=1)
+                del_idx = st.number_input("輸入左側 Index 編號", min_value=0, max_value=int(df.index.max()), step=1)
                 if st.button("⚠️ 確認刪除", type="primary"):
                     new_df = df.drop(del_idx).reset_index(drop=True)
                     new_df['日期'] = new_df['日期'].dt.strftime('%Y-%m-%d')
