@@ -5,15 +5,38 @@ import datetime
 import plotly.express as px
 
 # --- 1. 頁面配置 ---
-st.set_page_config(page_title="手機雲端帳本", layout="wide") # 使用 wide 模式讓卡片並排更好看
+st.set_page_config(page_title="手機雲端帳本", layout="centered")
 
-# 優化字體與間距
+# 針對手機版進行字體與佈局的細節微調
 st.markdown("""
     <style>
-    [data-testid="stMetricValue"] { font-size: 28px !important; font-weight: bold; }
-    [data-testid="stMetricLabel"] { font-size: 16px !important; }
-    .stTabs [data-baseweb="tab"] { font-size: 18px !important; width: 33%; }
-    hr { margin-top: 1rem; margin-bottom: 1rem; }
+    /* 1. 縮小統計數值的字體，避免重疊 */
+    [data-testid="stMetricValue"] { 
+        font-size: 20px !important; 
+        font-weight: bold; 
+    }
+    /* 2. 縮小統計標籤的字體 */
+    [data-testid="stMetricLabel"] { 
+        font-size: 13px !important; 
+    }
+    /* 3. 讓卡片在空間不足時自動換行 */
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap !important;
+    }
+    /* 4. 調整 Tab 標籤，讓它在手機上不會擠成一團 */
+    .stTabs [data-baseweb="tab"] { 
+        font-size: 15px !important; 
+        width: 33% !important; 
+        padding: 5px 0px !important;
+    }
+    /* 5. 縮小歷史表格字體 */
+    .stDataFrame div {
+        font-size: 12px !important;
+    }
+    /* 6. 標題縮小一點，避免像圖片中那樣斷行 */
+    h3 {
+        font-size: 1.2rem !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -37,106 +60,96 @@ tab1, tab2, tab3 = st.tabs(["📝 新增", "📊 分析", "📜 歷史"])
 # --- Tab 1: 新增紀錄 ---
 with tab1:
     st.subheader("➕ 新增帳目")
-    type_choice = st.radio("選擇類型", ["支出", "收入"], horizontal=True)
-    if type_choice == "收入":
-        categories = ["薪資", "獎金", "投資", "其他"]
-    else:
-        categories = ["飲食", "交通", "購物", "稅金", "娛樂", "醫療費", "電信費", "其他"]
+    # 使用 radio 並設為橫向，省空間
+    t_choice = st.radio("類型", ["支出", "收入"], horizontal=True)
     
-    with st.form("my_form", clear_on_submit=True):
+    if t_choice == "收入":
+        cats = ["薪資", "獎金", "投資", "其他"]
+    else:
+        cats = ["飲食", "交通", "購物", "稅金", "娛樂", "醫療費", "電信費", "其他"]
+    
+    with st.form("add_form", clear_on_submit=True):
         d = st.date_input("日期", datetime.date.today())
-        c = st.selectbox("分類項目", categories)
-        a = st.number_input("金額 (TWD)", min_value=0, step=1)
-        m = st.selectbox("支付方式", ["現金", "信用卡", "轉帳"]) if type_choice == "支出" else " "
+        c = st.selectbox("分類", cats)
+        a = st.number_input("金額", min_value=0, step=1)
+        m = st.selectbox("方式", ["現金", "信用卡", "轉帳"]) if t_choice == "支出" else " "
         n = st.text_input("備註")
-        if st.form_submit_button("確認儲存 💾"):
-            if a == 0:
-                st.warning("請輸入金額！")
-            else:
-                new_row = pd.DataFrame([{"日期": d, "分類項目": c, "收支類型": type_choice, "金額": a, "結餘": a if type_choice == "收入" else -a, "支出方式": m, "備註": n}])
-                updated_df = pd.concat([df, new_row], ignore_index=True)
-                updated_df['日期'] = pd.to_datetime(updated_df['日期']).dt.strftime('%Y-%m-%d')
-                conn.update(data=updated_df)
-                st.success("✅ 資料儲存成功！")
+        
+        if st.form_submit_button("確認儲存", use_container_width=True):
+            if a > 0:
+                new_row = pd.DataFrame([{"日期": d, "分類項目": c, "收支類型": t_choice, "金額": a, "結餘": a if t_choice == "收入" else -a, "支出方式": m, "備註": n}])
+                updated = pd.concat([df, new_row], ignore_index=True)
+                updated['日期'] = pd.to_datetime(updated['日期']).dt.strftime('%Y-%m-%d')
+                conn.update(data=updated)
+                st.success("儲存成功！")
                 st.rerun()
+            else:
+                st.warning("請輸入金額")
 
 # --- Tab 2: 分析 ---
 with tab2:
     if not df.empty:
-        curr_year = datetime.date.today().year
-        year_exp = df[(df["收支類型"] == "支出") & (df['日期'].dt.year == curr_year)]
-        if not year_exp.empty:
-            st.write(f"📊 {curr_year} 年度支出結構")
-            fig = px.pie(year_exp.groupby("分類項目")["金額"].sum().reset_index(), values='金額', names='分類項目', hole=0.4)
+        curr_y = datetime.date.today().year
+        y_exp = df[(df["收支類型"] == "支出") & (df['日期'].dt.year == curr_y)]
+        if not y_exp.empty:
+            st.write(f"📊 {curr_y} 支出佔比")
+            fig = px.pie(y_exp.groupby("分類項目")["金額"].sum().reset_index(), values='金額', names='分類項目', hole=0.4)
             st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("暫無數據")
 
-# --- Tab 3: 歷史紀錄 (比照圖片樣式完全重製) ---
+# --- Tab 3: 歷史紀錄 (手機排版修復版) ---
 with tab3:
     if not df.empty:
-        # 預處理日期資訊
         df['Month'] = df['日期'].dt.strftime('%Y-%m')
         df['Year'] = df['日期'].dt.year
-        all_months = sorted(df['Month'].unique(), reverse=True)
-        
-        # 月份選擇器
-        sel_month = st.selectbox("🔍 選擇查詢月份", all_months)
-        sel_year = int(sel_month.split('-')[0])
+        all_m = sorted(df['Month'].unique(), reverse=True)
+        sel_m = st.selectbox("🔍 選擇月份", all_m)
+        sel_y = int(sel_m.split('-')[0])
 
-        # --- 第一部分：當月財務摘要 ---
-        st.markdown(f"### 📅 {sel_month} 財務摘要")
-        m_df = df[df['Month'] == sel_month].copy()
-        m_inc = m_df[m_df["收支類型"] == "收入"]["金額"].sum()
-        m_exp = m_df[m_df["收支類型"] == "支出"]["金額"].sum()
-        m_bal = m_inc - m_exp
+        # 月度摘要 (標題變小)
+        st.markdown(f"### 📅 {sel_m} 摘要")
+        m_df = df[df['Month'] == sel_m].copy()
+        m_i = m_df[m_df["收支類型"] == "收入"]["金額"].sum()
+        m_e = m_df[m_df["收支類型"] == "支出"]["金額"].sum()
 
-        mc1, mc2, mc3 = st.columns(3)
-        mc1.metric("💰 當月總收入", f"{m_inc:,.0f} 元")
-        mc2.metric("💸 當月總支出", f"{m_exp:,.0f} 元")
-        mc3.metric("⚖️ 本月結餘", f"{m_bal:,.0f} 元")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("當月收入", f"{m_i:,.0f}")
+        col2.metric("當月支出", f"{m_e:,.0f}")
+        col3.metric("月結餘", f"{(m_i-m_e):,.0f}")
 
-        # --- 第二部分：當年度累計統計 ---
-        st.markdown(f"### 🗓️ {sel_year} 年度累計統計")
+        # 年度統計
+        st.markdown(f"### 🗓️ {sel_y} 年度統計")
         y_df = df[df['Year'] == sel_year]
-        y_inc = y_df[y_df["收支類型"] == "收入"]["金額"].sum()
-        y_exp = y_df[y_df["收支類型"] == "支出"]["金額"].sum()
-        y_bal = y_inc - y_exp
+        y_i = y_df[y_df["收支類型"] == "收入"]["金額"].sum()
+        y_e = y_df[y_df["收支類型"] == "支出"]["金額"].sum()
 
         yc1, yc2, yc3 = st.columns(3)
-        yc1.metric("📈 當年度總收入", f"{y_inc:,.0f} 元")
-        yc2.metric("📉 當年度總支出", f"{y_exp:,.0f} 元")
-        yc3.metric("🏛️ 當年度總結餘", f"{y_bal:,.0f} 元")
+        yc1.metric("年度收入", f"{y_i:,.0f}")
+        yc2.metric("年度支出", f"{y_e:,.0f}")
+        yc3.metric("年結餘", f"{(y_i-y_e):,.0f}")
         
         st.markdown("---")
 
-        # --- 第三部分：明細表格 ---
         if not m_df.empty:
-            def style_row(row):
+            def style_inc(row):
                 return ['color: #81D8D0' if row['收支類型'] == '收入' else '' for _ in row]
             
-            # 格式化日期與選取欄位
+            # 手機版隱藏非必要欄位以維持表格整潔
             disp = m_df.copy()
-            disp['日期'] = disp['日期'].dt.strftime('%Y-%m-%d')
-            disp = disp[["日期", "分類項目", "收支類型", "金額", "結餘", "支出方式", "備註"]]
+            disp['日期'] = disp['日期'].dt.strftime('%m-%d')
+            disp = disp[["日期", "分類項目", "收支類型", "金額"]]
             
-            st.dataframe(disp.style.apply(style_row, axis=1).format({"金額": "{:,.0f}", "結餘": "{:,.0f}"}), use_container_width=True)
+            st.dataframe(disp.style.apply(style_inc, axis=1).format({"金額": "{:,.0f}"}), use_container_width=True, hide_index=False)
 
-            # --- 第四部分：刪除紀錄功能 ---
-            with st.expander("🗑️ 刪除單筆紀錄"):
-                st.write("請對照上方表格最左側的編號進行刪除：")
-                del_idx = st.number_input("輸入要刪除的編號 (Index)", min_value=0, max_value=int(df.index.max()), step=1)
-                if st.button("⚠️ 確認刪除", type="primary"):
-                    # 執行刪除並清理暫存欄位
+            with st.expander("🗑️ 刪除紀錄"):
+                del_idx = st.number_input("輸入 Index 編號", min_value=0, max_value=int(df.index.max()), step=1)
+                if st.button("⚠️ 執行刪除", type="primary"):
                     new_df = df.drop(del_idx).reset_index(drop=True)
                     new_df['日期'] = new_df['日期'].dt.strftime('%Y-%m-%d')
-                    # 存回前移除輔助欄位
                     save_df = new_df.drop(columns=['Month', 'Year']) if 'Month' in new_df.columns else new_df
-                    
                     conn.update(data=save_df)
-                    st.success(f"已成功刪除編號 {del_idx} 的紀錄！")
+                    st.success("已刪除")
                     st.rerun()
-        else:
-            st.warning("該月份無明細資料")
     else:
-        st.info("目前尚無資料，請先至「新增」分頁建立第一筆紀錄。")
+        st.info("尚無資料")
