@@ -7,19 +7,17 @@ import plotly.express as px
 # --- 1. 頁面配置 ---
 st.set_page_config(page_title="手機雲端帳本", layout="centered")
 
-# RWD 手機版介面深度優化樣式
+# RWD 手機版樣式微調
 st.markdown("""
     <style>
-    /* 1. 優化大標題：改為 1.5rem 並確保不中斷一行顯示 */
-    .main-title {
-        font-size: 1.5rem !important;
-        font-weight: bold;
+    /* 調整 subheader 的邊距，讓畫面更緊湊 */
+    .stMarkdown h2 {
+        margin-top: -10px !important;
+        margin-bottom: 5px !important;
         text-align: center;
-        margin-bottom: 10px;
-        color: white;
     }
     
-    /* 2. 統計指標 (Metric) 排版：改為 2+1 模式確保不跑版 */
+    /* 確保統計指標在手機上清晰且不重疊 */
     [data-testid="stMetricValue"] { 
         font-size: 18px !important; 
         font-weight: bold; 
@@ -28,24 +26,13 @@ st.markdown("""
         font-size: 13px !important; 
     }
     
-    /* 3. 分頁標籤縮小，增加點擊間距 */
-    .stTabs [data-baseweb="tab"] { 
-        font-size: 14px !important; 
-        padding: 10px 5px !important;
-    }
-
-    /* 4. 表格字體優化與支援橫向滑動 */
-    .stDataFrame div { 
-        font-size: 12px !important; 
-    }
-    
-    /* 5. 表單內元件間距調整 */
-    .stForm { padding: 10px !important; }
+    /* 表格字體優化 */
+    .stDataFrame div { font-size: 12px !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 顯示自定義縮小版的標題，解決 的問題
-st.markdown('<div class="main-title">📱 手機雲端帳本</div>', unsafe_allow_html=True)
+# 使用您提議的 subheader
+st.subheader("📱 手機雲端帳本")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -66,7 +53,7 @@ tab1, tab2, tab3 = st.tabs(["📝 新增", "📊 分析", "📜 歷史"])
 
 # --- Tab 1: 新增紀錄 ---
 with tab1:
-    st.subheader("➕ 新增帳目")
+    st.write("### ➕ 新增帳目")
     t_choice = st.radio("類型", ["支出", "收入"], horizontal=True)
     cats = ["薪資", "獎金", "投資", "其他"] if t_choice == "收入" else ["飲食", "交通", "購物", "稅金", "娛樂", "醫療費", "電信費", "其他"]
     
@@ -97,7 +84,7 @@ with tab2:
     else:
         st.info("暫無數據")
 
-# --- Tab 3: 歷史紀錄 (採用 2+1 佈局避免跑版) ---
+# --- Tab 3: 歷史紀錄 (採用穩定排版) ---
 with tab3:
     if not df.empty:
         df['Month'] = df['日期'].dt.strftime('%Y-%m')
@@ -114,15 +101,14 @@ with tab3:
         y_i = y_df[y_df["收支類型"] == "收入"]["金額"].sum()
         y_e = y_df[y_df["收支類型"] == "支出"]["金額"].sum()
 
-        # 月摘要 - 收入支出並列，結餘獨立
-        st.markdown(f"### 📅 {sel_m} 摘要")
+        # 摘要排版優化：收入支出並列，結餘獨立
+        st.write(f"### 📅 {sel_m} 摘要")
         m_col1, m_col2 = st.columns(2)
         m_col1.metric("月收入", f"{m_i:,.0f}")
         m_col2.metric("月支出", f"{m_e:,.0f}")
-        st.metric("本月累計結餘", f"{(m_i-m_e):,.0f}")
+        st.metric("本月結餘", f"{(m_i-m_e):,.0f}")
 
-        # 年累計 - 收入支出並列，結餘獨立
-        st.markdown(f"### 🗓️ {sel_y} 年度累計")
+        st.write(f"### 🗓️ {sel_y} 年度累計")
         y_col1, y_col2 = st.columns(2)
         y_col1.metric("年收入", f"{y_i:,.0f}")
         y_col2.metric("年支出", f"{y_e:,.0f}")
@@ -130,7 +116,7 @@ with tab3:
         
         st.markdown("---")
 
-        # 明細表 - 支援橫向捲動查看
+        # 明細表支援橫滑
         if not m_df.empty:
             def style_row(row):
                 return ['color: #81D8D0' if row['收支類型'] == '收入' else '' for _ in row]
@@ -139,7 +125,7 @@ with tab3:
             disp['日期'] = disp['日期'].dt.strftime('%m-%d')
             disp = disp[["日期", "分類項目", "收支類型", "金額", "結餘", "支出方式", "備註"]]
             
-            st.write("📖 明細表 (可左右滑動)")
+            st.write("📖 明細表 (左右滑動)")
             st.dataframe(
                 disp.style.apply(style_row, axis=1).format({"金額": "{:,.0f}", "結餘": "{:,.0f}"}), 
                 use_container_width=True
