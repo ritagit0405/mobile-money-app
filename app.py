@@ -7,7 +7,7 @@ import plotly.express as px
 # --- 1. 頁面配置 ---
 st.set_page_config(page_title="手機雲端帳本", layout="centered")
 
-# 針對「收入/支出並列、結餘獨立一行」的 RWD 優化
+# 針對手機版 RWD 優化 CSS
 st.markdown("""
     <style>
     /* 1. 設定 Metric 樣式，確保數字清晰 */
@@ -19,20 +19,26 @@ st.markdown("""
         font-size: 13px !important; 
     }
 
-    /* 2. 讓結餘那一行呈現稍微不同的背景色，增加視覺重點 */
+    /* 2. 讓結餘區塊帶有微透明背景，增加層次感 */
     div[data-testid="stMetric"] {
         background-color: rgba(255, 255, 255, 0.05);
         padding: 10px;
         border-radius: 8px;
     }
 
-    /* 3. 調整 Tab 與表格 */
+    /* 3. 調整 Tab 字體大小與表格顯示 */
     .stTabs [data-baseweb="tab"] { font-size: 14px !important; }
     .stDataFrame div { font-size: 12px !important; }
     h3 { font-size: 1.1rem !important; margin-bottom: 8px !important; }
+    
+    /* 修正手機版標題間距 */
+    .stSubheader { margin-top: -10px !important; }
     </style>
     """, unsafe_allow_html=True)
- st.subheader("💰手機雲端帳本")
+
+# 修正處：刪除行首多餘空格
+st.subheader("💰 手機雲端帳本")
+
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
@@ -52,7 +58,7 @@ tab1, tab2, tab3 = st.tabs(["📝 新增", "📊 消費分析", "📜 消費明�
 
 # --- Tab 1: 新增紀錄 ---
 with tab1:
-    st.subheader("➕ 新增帳目")
+    st.markdown("### ➕ 新增帳目")
     t_choice = st.radio("類型", ["支出", "收入"], horizontal=True)
     cats = ["薪資", "獎金", "投資", "其他"] if t_choice == "收入" else ["飲食", "交通", "購物", "稅金", "娛樂", "醫療費", "電信費", "其他"]
     
@@ -83,7 +89,7 @@ with tab2:
     else:
         st.info("暫無數據")
 
-# --- Tab 3: 歷史紀錄 (改為 2+1 排版) ---
+# --- Tab 3: 消費明細 ---
 with tab3:
     if not df.empty:
         df['Month'] = df['日期'].dt.strftime('%Y-%m')
@@ -100,12 +106,12 @@ with tab3:
         y_i = y_df[y_df["收支類型"] == "收入"]["金額"].sum()
         y_e = y_df[y_df["收支類型"] == "支出"]["金額"].sum()
 
-        # --- 月度摘要 ---
+        # --- 月度摘要 (2+1 排版確保不跑版) ---
         st.markdown(f"### 📅 {sel_m} 摘要")
         col1, col2 = st.columns(2)
         col1.metric("月收入", f"{m_i:,.0f}")
         col2.metric("月支出", f"{m_e:,.0f}")
-        st.metric("本月預計結餘", f"{(m_i-m_e):,.0f}")
+        st.metric("本月結餘", f"{(m_i-m_e):,.0f}")
 
         # --- 年度摘要 ---
         st.markdown(f"### 🗓️ {sel_y} 年度累計")
@@ -123,9 +129,10 @@ with tab3:
             
             disp = m_df.copy()
             disp['日期'] = disp['日期'].dt.strftime('%m-%d')
+            # 確保包含所有欄位
             disp = disp[["日期", "分類項目", "收支類型", "金額", "結餘", "支出方式", "備註"]]
             
-            st.write("📖 明細表 (左右滑動查看完整資訊)")
+            st.write("📖 明細表 (可左右滑動)")
             st.dataframe(
                 disp.style.apply(style_row, axis=1).format({"金額": "{:,.0f}", "結餘": "{:,.0f}"}), 
                 use_container_width=True
@@ -142,4 +149,3 @@ with tab3:
                     st.rerun()
     else:
         st.info("尚無資料")
-
