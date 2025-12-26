@@ -7,12 +7,19 @@ import plotly.express as px
 # --- 1. 頁面配置 ---
 st.set_page_config(page_title="手機雲端帳本", layout="centered")
 
-# 在這裡加入實體標題，這樣手機螢幕才會顯示
-st.title("📱 手機雲端帳本")
-# 針對「收入/支出並列、結餘獨立一行」的 RWD 優化
+# RWD 手機版介面深度優化樣式
 st.markdown("""
     <style>
-    /* 1. 設定 Metric 樣式，確保數字清晰 */
+    /* 1. 優化大標題：改為 1.5rem 並確保不中斷一行顯示 */
+    .main-title {
+        font-size: 1.5rem !important;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 10px;
+        color: white;
+    }
+    
+    /* 2. 統計指標 (Metric) 排版：改為 2+1 模式確保不跑版 */
     [data-testid="stMetricValue"] { 
         font-size: 18px !important; 
         font-weight: bold; 
@@ -20,20 +27,25 @@ st.markdown("""
     [data-testid="stMetricLabel"] { 
         font-size: 13px !important; 
     }
-
-    /* 2. 讓結餘那一行呈現稍微不同的背景色，增加視覺重點 */
-    div[data-testid="stMetric"] {
-        background-color: rgba(255, 255, 255, 0.05);
-        padding: 10px;
-        border-radius: 8px;
+    
+    /* 3. 分頁標籤縮小，增加點擊間距 */
+    .stTabs [data-baseweb="tab"] { 
+        font-size: 14px !important; 
+        padding: 10px 5px !important;
     }
 
-    /* 3. 調整 Tab 與表格 */
-    .stTabs [data-baseweb="tab"] { font-size: 14px !important; }
-    .stDataFrame div { font-size: 12px !important; }
-    h3 { font-size: 1.1rem !important; margin-bottom: 8px !important; }
+    /* 4. 表格字體優化與支援橫向滑動 */
+    .stDataFrame div { 
+        font-size: 12px !important; 
+    }
+    
+    /* 5. 表單內元件間距調整 */
+    .stForm { padding: 10px !important; }
     </style>
     """, unsafe_allow_html=True)
+
+# 顯示自定義縮小版的標題，解決 的問題
+st.markdown('<div class="main-title">📱 手機雲端帳本</div>', unsafe_allow_html=True)
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -50,7 +62,7 @@ def load_data():
 df = load_data()
 
 # --- 2. 功能分頁 ---
-tab1, tab2, tab3 = st.tabs(["📝 新增", "📊 消費分析", "📜 消費歷史"])
+tab1, tab2, tab3 = st.tabs(["📝 新增", "📊 分析", "📜 歷史"])
 
 # --- Tab 1: 新增紀錄 ---
 with tab1:
@@ -62,7 +74,7 @@ with tab1:
         d = st.date_input("日期", datetime.date.today())
         c = st.selectbox("分類項目", cats)
         a = st.number_input("金額 (TWD)", min_value=0, step=1)
-        m = st.selectbox("支出方式", ["現金", "信用卡", "轉帳"]) if t_choice == "支出" else " "
+        m = st.selectbox("方式", ["現金", "信用卡", "轉帳"]) if t_choice == "支出" else " "
         n = st.text_input("備註")
         if st.form_submit_button("確認儲存 💾", use_container_width=True):
             if a > 0:
@@ -79,13 +91,13 @@ with tab2:
         curr_y = datetime.date.today().year
         y_exp = df[(df["收支類型"] == "支出") & (df['日期'].dt.year == curr_y)]
         if not y_exp.empty:
-            st.write(f"📊 {curr_y} 支出分析")
+            st.write(f"📊 {curr_y} 支出佔比")
             fig = px.pie(y_exp.groupby("分類項目")["金額"].sum().reset_index(), values='金額', names='分類項目', hole=0.4)
             st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("暫無數據")
 
-# --- Tab 3: 歷史紀錄 (改為 2+1 排版) ---
+# --- Tab 3: 歷史紀錄 (採用 2+1 佈局避免跑版) ---
 with tab3:
     if not df.empty:
         df['Month'] = df['日期'].dt.strftime('%Y-%m')
@@ -102,23 +114,23 @@ with tab3:
         y_i = y_df[y_df["收支類型"] == "收入"]["金額"].sum()
         y_e = y_df[y_df["收支類型"] == "支出"]["金額"].sum()
 
-        # --- 月度摘要 ---
+        # 月摘要 - 收入支出並列，結餘獨立
         st.markdown(f"### 📅 {sel_m} 摘要")
-        col1, col2 = st.columns(2)
-        col1.metric("月收入", f"{m_i:,.0f}")
-        col2.metric("月支出", f"{m_e:,.0f}")
-        st.metric("本月預計結餘", f"{(m_i-m_e):,.0f}")
+        m_col1, m_col2 = st.columns(2)
+        m_col1.metric("月收入", f"{m_i:,.0f}")
+        m_col2.metric("月支出", f"{m_e:,.0f}")
+        st.metric("本月累計結餘", f"{(m_i-m_e):,.0f}")
 
-        # --- 年度摘要 ---
+        # 年累計 - 收入支出並列，結餘獨立
         st.markdown(f"### 🗓️ {sel_y} 年度累計")
-        ycol1, ycol2 = st.columns(2)
-        ycol1.metric("年收入", f"{y_i:,.0f}")
-        ycol2.metric("年支出", f"{y_e:,.0f}")
+        y_col1, y_col2 = st.columns(2)
+        y_col1.metric("年收入", f"{y_i:,.0f}")
+        y_col2.metric("年支出", f"{y_e:,.0f}")
         st.metric("年度總結餘", f"{(y_i-y_e):,.0f}")
         
         st.markdown("---")
 
-        # --- 完整明細表 (支援橫向捲動) ---
+        # 明細表 - 支援橫向捲動查看
         if not m_df.empty:
             def style_row(row):
                 return ['color: #81D8D0' if row['收支類型'] == '收入' else '' for _ in row]
@@ -127,22 +139,20 @@ with tab3:
             disp['日期'] = disp['日期'].dt.strftime('%m-%d')
             disp = disp[["日期", "分類項目", "收支類型", "金額", "結餘", "支出方式", "備註"]]
             
-            st.write("📖 明細表 (左右滑動查看完整資訊)")
+            st.write("📖 明細表 (可左右滑動)")
             st.dataframe(
                 disp.style.apply(style_row, axis=1).format({"金額": "{:,.0f}", "結餘": "{:,.0f}"}), 
                 use_container_width=True
             )
 
             with st.expander("🗑️ 刪除紀錄"):
-                del_idx = st.number_input("輸入編號 (Index)", min_value=0, max_value=int(df.index.max()), step=1)
+                del_idx = st.number_input("輸入 Index 編號", min_value=0, max_value=int(df.index.max()), step=1)
                 if st.button("⚠️ 確認刪除", type="primary", use_container_width=True):
                     new_df = df.drop(del_idx).reset_index(drop=True)
                     new_df['日期'] = new_df['日期'].dt.strftime('%Y-%m-%d')
                     save_df = new_df.drop(columns=['Month', 'Year']) if 'Month' in new_df.columns else new_df
                     conn.update(data=save_df)
-                    st.success("已成功刪除")
+                    st.success("已成功刪除！")
                     st.rerun()
     else:
         st.info("尚無資料")
-
-
