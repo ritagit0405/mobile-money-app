@@ -3,6 +3,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import datetime
 import plotly.express as px
+import plotly.graph_objects as go
 
 # --- 1. 頁面配置 ---
 st.set_page_config(page_title="手機雲端帳本", layout="centered")
@@ -39,13 +40,12 @@ def load_data():
         data['日期'] = pd.to_datetime(data['日期'], errors='coerce')
         data = data.dropna(subset=['日期'])
         data['金額'] = pd.to_numeric(data['金額'], errors='coerce').fillna(0)
-        # 事先建立年份與月份欄位
+        # 建立年份與月份欄位
         data['Year'] = data['日期'].dt.year
         data['Month_Num'] = data['日期'].dt.month
-        data['Month_Str'] = data['日期'].dt.strftime('%Y-%m')
         return data
     except:
-        return pd.DataFrame(columns=["日期", "分類項目", "收支類型", "金額", "結餘", "支出方式", "備註", "Year", "Month_Num", "Month_Str"])
+        return pd.DataFrame(columns=["日期", "分類項目", "收支類型", "金額", "結餘", "支出方式", "備註", "Year", "Month_Num"])
 
 df = load_data()
 
@@ -67,7 +67,7 @@ with tab1:
         if st.form_submit_button("確認儲存 💾", use_container_width=True):
             if a > 0:
                 new_row = pd.DataFrame([{"日期": d, "分類項目": c, "收支類型": t_choice, "金額": a, "結餘": a if t_choice == "收入" else -a, "支出方式": m, "備註": n}])
-                updated = pd.concat([df.drop(columns=['Year', 'Month_Num', 'Month_Str'], errors='ignore'), new_row], ignore_index=True)
+                updated = pd.concat([df.drop(columns=['Year', 'Month_Num'], errors='ignore'), new_row], ignore_index=True)
                 updated['日期'] = pd.to_datetime(updated['日期']).dt.strftime('%Y-%m-%d')
                 conn.update(data=updated)
                 st.success("✅ 儲存成功！")
@@ -78,7 +78,6 @@ with tab2:
     if not df.empty:
         all_years_analysis = sorted(df['Year'].unique(), reverse=True)
         sel_y_analysis = st.selectbox("📅 選擇分析年份", all_years_analysis, key="analysis_y")
-        
         y_exp = df[(df["收支類型"] == "支出") & (df['Year'] == sel_y_analysis)]
         
         if not y_exp.empty:
@@ -86,29 +85,23 @@ with tab2:
             fig = px.pie(y_exp.groupby("分類項目")["金額"].sum().reset_index(), 
                          values='金額', names='分類項目', hole=0.4)
             st.plotly_chart(fig, use_container_width=True)
-            
-            # 顯示該年總支出
-            total_y_e = y_exp["金額"].sum()
-            st.info(f"💡 {sel_y_analysis} 年度總支出金額：NT$ {total_y_e:,.0f}")
-        else:
-            st.warning(f"{sel_y_analysis} 年暫無支出數據")
+            st.info(f"💡 {sel_y_analysis} 年度總支出：NT$ {y_exp['金額'].sum():,.0f}")
     else:
         st.info("暫無數據")
 
 # --- Tab 3: 消費明細 ---
 with tab3:
     if not df.empty:
-        # 1. 選擇年份
+        # 1. 篩選控制
         all_years = sorted(df['Year'].unique(), reverse=True)
         sel_y = st.selectbox("📅 選擇年份", all_years, key="detail_y")
         
-        # 2. 選擇月份 (根據選擇的年份過濾出有的月份)
         available_months = sorted(df[df['Year'] == sel_y]['Month_Num'].unique(), reverse=True)
         month_options = [f"{sel_y}-{m:02d}" for m in available_months]
         sel_m_str = st.selectbox("🔍 選擇月份", month_options)
         sel_m = int(sel_m_str.split('-')[1])
 
-        # --- 資料計算 ---
+        # 2. 計算數據
         m_df = df[(df['Year'] == sel_y) & (df['Month_Num'] == sel_m)].copy()
         m_i = m_df[m_df["收支類型"] == "收入"]["金額"].sum()
         m_e = m_df[m_df["收支類型"] == "支出"]["金額"].sum()
@@ -117,48 +110,84 @@ with tab3:
         y_i = y_df[y_df["收支類型"] == "收入"]["金額"].sum()
         y_e = y_df[y_df["收支類型"] == "支出"]["金額"].sum()
 
-        # --- 月度摘要 ---
+        # 3. 顯示摘要
         st.markdown(f"### 📅 {sel_m_str} 摘要")
         col1, col2 = st.columns(2)
         col1.metric("月收入", f"{m_i:,.0f}")
         col2.metric("月支出", f"{m_e:,.0f}")
         st.metric("本月結餘", f"{(m_i-m_e):,.0f}")
 
-        # --- 年度摘要 ---
         st.markdown(f"### 🗓️ {sel_y} 年度累計")
         ycol1, ycol2 = st.columns(2)
         ycol1.metric("年收入", f"{y_i:,.0f}")
         ycol2.metric("年支出", f"{y_e:,.0f}")
-        st.metric("年度總結餘", f"{(y_i-y_e):,.0f}")
         
         st.markdown("---")
 
-        # --- 完整明細表 ---
+        # 4. 明細表
         if not m_df.empty:
-            def style_row(row):
-                return ['color: #81D8D0' if row['收支類型'] == '收入' else '' for _ in row]
-            
             disp = m_df.copy()
             disp['日期'] = disp['日期'].dt.strftime('%m-%d')
-            disp = disp[["日期", "分類項目", "收支類型", "金額", "結餘", "支出方式", "備註"]]
-            
-            st.write("📖 明細表 (可左右滑動)")
-            st.dataframe(
-                disp.style.apply(style_row, axis=1).format({"金額": "{:,.0f}", "結餘": "{:,.0f}"}), 
-                use_container_width=True
-            )
+            disp = disp[["日期", "分類項目", "收支類型", "金額", "支出方式", "備註"]]
+            st.write("📖 明細表")
+            st.dataframe(disp.style.format({"金額": "{:,.0f}"}), use_container_width=True)
 
-            with st.expander("🗑️ 刪除紀錄"):
-                st.write("請輸入表格對應的原始編號 (Index)：")
-                del_idx = st.number_input("編號 (Index)", min_value=0, max_value=int(df.index.max()), step=1)
-                if st.button("⚠️ 確認刪除", type="primary", use_container_width=True):
-                    # 刪除並存回 Google Sheets
-                    new_df = df.drop(del_idx).reset_index(drop=True)
-                    # 存檔前移除輔助計算欄位
-                    save_df = new_df.drop(columns=['Year', 'Month_Num', 'Month_Str'], errors='ignore')
-                    save_df['日期'] = pd.to_datetime(save_df['日期']).dt.strftime('%Y-%m-%d')
-                    conn.update(data=save_df)
-                    st.success("已成功刪除")
-                    st.rerun()
+        st.markdown("---")
+
+        # --- 📈 更新：年度收支趨勢折線圖 ---
+        st.markdown("### 📈 年度收支趨勢走勢")
+        
+        # 準備年度加總數據
+        yearly_summary = df.groupby(['Year', '收支類型'])['金額'].sum().unstack(fill_value=0).reset_index()
+        # 確保收入與支出欄位存在
+        if '收入' not in yearly_summary.columns: yearly_summary['收入'] = 0
+        if '支出' not in yearly_summary.columns: yearly_summary['支出'] = 0
+        yearly_summary['結餘'] = yearly_summary['收入'] - yearly_summary['支出']
+        
+        fig_trend = go.Figure()
+        
+        # 總收入折線 (綠色)
+        fig_trend.add_trace(go.Scatter(
+            x=yearly_summary['Year'], y=yearly_summary['收入'],
+            mode='lines+markers', name='總收入',
+            line=dict(color='#81D8D0', width=3),
+            marker=dict(size=8)
+        ))
+        
+        # 總支出折線 (紅色)
+        fig_trend.add_trace(go.Scatter(
+            x=yearly_summary['Year'], y=yearly_summary['支出'],
+            mode='lines+markers', name='總支出',
+            line=dict(color='#FF6B6B', width=3),
+            marker=dict(size=8)
+        ))
+
+        # 淨結餘折線 (灰色虛線)
+        fig_trend.add_trace(go.Scatter(
+            x=yearly_summary['Year'], y=yearly_summary['結餘'],
+            mode='lines+markers', name='年結餘',
+            line=dict(color='#AAAAAA', width=2, dash='dot'),
+            marker=dict(size=6, symbol='diamond')
+        ))
+
+        fig_trend.update_layout(
+            xaxis=dict(tickmode='linear', dtick=1), # 確保年份刻度為整數
+            hovermode='x unified', # 滑鼠移動到該年份時同時顯示所有數值
+            margin=dict(l=20, r=20, t=20, b=20),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        
+        st.plotly_chart(fig_trend, use_container_width=True)
+
+        # 5. 刪除功能
+        with st.expander("🗑️ 刪除紀錄"):
+            del_idx = st.number_input("輸入 Index 編號", min_value=0, max_value=int(df.index.max()), step=1)
+            if st.button("⚠️ 確認刪除", type="primary", use_container_width=True):
+                new_df = df.drop(del_idx).reset_index(drop=True)
+                save_df = new_df.drop(columns=['Year', 'Month_Num'], errors='ignore')
+                save_df['日期'] = pd.to_datetime(save_df['日期']).dt.strftime('%Y-%m-%d')
+                conn.update(data=save_df)
+                st.success("已成功刪除")
+                st.rerun()
     else:
         st.info("尚無資料")
