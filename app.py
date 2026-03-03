@@ -124,29 +124,41 @@ with tab3:
         
         st.markdown("---")
 
-        # 4. 明細表
+        # 4. 明細表 (套用 Tiffany 藍優化樣式)
         if not m_df.empty:
+            st.write("📖 明細表 (Tiffany藍表示收入項目)")
+            
+            # 準備顯示資料
             disp = m_df.copy()
             disp['日期'] = disp['日期'].dt.strftime('%m-%d')
             disp = disp[["日期", "分類項目", "收支類型", "金額", "支出方式", "備註"]]
-            st.write("📖 明細表")
-            st.dataframe(disp.style.format({"金額": "{:,.0f}"}), use_container_width=True)
+
+            # 定義樣式函數
+            def style_row(row):
+                # Tiffany 藍 (#81D8D0) 應用於收入列
+                color = '#81D8D0' if row['收支類型'] == '收入' else ''
+                # 返回該行所有欄位的 CSS 樣式，如果是收入則加粗
+                return [f'color: {color}; font-weight: bold' if color else '' for _ in row]
+
+            # 使用 Styler 呈現
+            st.dataframe(
+                disp.style.apply(style_row, axis=1)
+                          .format({"金額": "{:,.0f}"}), 
+                use_container_width=True
+            )
 
         st.markdown("---")
 
-        # --- 📈 更新：年度收支趨勢折線圖 ---
+        # --- 📈 年度收支趨勢折線圖 ---
         st.markdown("### 📈 年度收支趨勢走勢")
         
-        # 準備年度加總數據
         yearly_summary = df.groupby(['Year', '收支類型'])['金額'].sum().unstack(fill_value=0).reset_index()
-        # 確保收入與支出欄位存在
         if '收入' not in yearly_summary.columns: yearly_summary['收入'] = 0
         if '支出' not in yearly_summary.columns: yearly_summary['支出'] = 0
         yearly_summary['結餘'] = yearly_summary['收入'] - yearly_summary['支出']
         
         fig_trend = go.Figure()
         
-        # 總收入折線 (綠色)
         fig_trend.add_trace(go.Scatter(
             x=yearly_summary['Year'], y=yearly_summary['收入'],
             mode='lines+markers', name='總收入',
@@ -154,7 +166,6 @@ with tab3:
             marker=dict(size=8)
         ))
         
-        # 總支出折線 (紅色)
         fig_trend.add_trace(go.Scatter(
             x=yearly_summary['Year'], y=yearly_summary['支出'],
             mode='lines+markers', name='總支出',
@@ -162,7 +173,6 @@ with tab3:
             marker=dict(size=8)
         ))
 
-        # 淨結餘折線 (灰色虛線)
         fig_trend.add_trace(go.Scatter(
             x=yearly_summary['Year'], y=yearly_summary['結餘'],
             mode='lines+markers', name='年結餘',
@@ -171,8 +181,8 @@ with tab3:
         ))
 
         fig_trend.update_layout(
-            xaxis=dict(tickmode='linear', dtick=1), # 確保年份刻度為整數
-            hovermode='x unified', # 滑鼠移動到該年份時同時顯示所有數值
+            xaxis=dict(tickmode='linear', dtick=1),
+            hovermode='x unified',
             margin=dict(l=20, r=20, t=20, b=20),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
