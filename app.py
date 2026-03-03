@@ -149,45 +149,7 @@ with tab3:
 
         st.markdown("---")
 
-        # --- 📈 年度收支趨勢折線圖 ---
-        st.markdown("### 📈 年度收支趨勢走勢")
-        
-        yearly_summary = df.groupby(['Year', '收支類型'])['金額'].sum().unstack(fill_value=0).reset_index()
-        if '收入' not in yearly_summary.columns: yearly_summary['收入'] = 0
-        if '支出' not in yearly_summary.columns: yearly_summary['支出'] = 0
-        yearly_summary['結餘'] = yearly_summary['收入'] - yearly_summary['支出']
-        
-        fig_trend = go.Figure()
-        
-        fig_trend.add_trace(go.Scatter(
-            x=yearly_summary['Year'], y=yearly_summary['收入'],
-            mode='lines+markers', name='總收入',
-            line=dict(color='#81D8D0', width=3),
-            marker=dict(size=8)
-        ))
-        
-        fig_trend.add_trace(go.Scatter(
-            x=yearly_summary['Year'], y=yearly_summary['支出'],
-            mode='lines+markers', name='總支出',
-            line=dict(color='#FF6B6B', width=3),
-            marker=dict(size=8)
-        ))
 
-        fig_trend.add_trace(go.Scatter(
-            x=yearly_summary['Year'], y=yearly_summary['結餘'],
-            mode='lines+markers', name='年結餘',
-            line=dict(color='#AAAAAA', width=2, dash='dot'),
-            marker=dict(size=6, symbol='diamond')
-        ))
-
-        fig_trend.update_layout(
-            xaxis=dict(tickmode='linear', dtick=1),
-            hovermode='x unified',
-            margin=dict(l=20, r=20, t=20, b=20),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-        )
-        
-        st.plotly_chart(fig_trend, use_container_width=True)
 
         # 5. 刪除功能
         with st.expander("🗑️ 刪除紀錄"):
@@ -201,3 +163,4 @@ with tab3:
                 st.rerun()
     else:
         st.info("尚無資料")
+
